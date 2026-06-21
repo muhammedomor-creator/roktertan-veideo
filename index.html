@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>রক্তের টান - ভিডিও পোর্টাল</title>
+    <!-- টেইলউইন্ড সিএসএস (ডিজাইনের জন্য) -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         .line-clamp-2 {
@@ -16,13 +17,23 @@
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
 
+    <!-- হেডার সেকশন -->
     <header class="bg-red-600 text-white shadow-md sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-2">
                 <span class="text-2xl font-bold tracking-wide">🩸 রক্তের টান (ভিডিও পোর্টাল)</span>
             </div>
             
-            <div>
+            <div class="flex items-center gap-3">
+                <!-- ব্যাকগ্রাউন্ডে নতুন ভিডিও খোঁজার স্ট্যাটাস লাইট -->
+                <div id="sync-indicator" class="flex items-center gap-2 bg-red-700 px-3 py-1.5 rounded-full text-xs font-semibold">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                    </span>
+                    <span id="sync-status">ডেটাবেজ চেক করা হচ্ছে...</span>
+                </div>
+
                 <a 
                   href="https://emergencyroktolagbe.vercel.app/" 
                   target="_blank" 
@@ -35,87 +46,185 @@
         </div>
     </header>
 
+    <!-- মূল কন্টেন্ট -->
     <main class="max-w-7xl mx-auto px-4 py-8">
         <div class="text-center mb-8">
             <h1 class="text-3xl font-extrabold text-gray-900 mb-2">রক্তদান ও স্বাস্থ্য সচেতনতা ভিডিও গ্যালারি</h1>
-            <p class="text-gray-600">ইউটিউব থেকে সরাসরি বাছাইকৃত সেরা সব তথ্যবহুল ভিডিও।</p>
+            <p id="total-count-text" class="text-gray-600 text-sm">তথ্য লোড হচ্ছে...</p>
         </div>
 
+        <!-- ভিডিও লোডিং মেসেজ (প্রথমবার ভিজিট করার জন্য) -->
         <div id="loading" class="text-center py-20 text-xl font-medium text-gray-500">
-            ইউটিউব থেকে ভিডিও লোড হচ্ছে, দয়া করে অপেক্ষা করুন...
+            দয়া করে অপেক্ষা করুন, ভিডিও লোড হচ্ছে...
         </div>
 
+        <!-- ভিডিও গ্রিড -->
         <div id="video-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 hidden">
-            </div>
+            <!-- জাভাস্ক্রিপ্ট দিয়ে ভিডিওর কার্ডগুলো এখানে বসবে -->
+        </div>
     </main>
 
+    <!-- ব্যাকগ্রাউন্ড নোটিফিকেশন টোস্ট (Toast) -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl transition-all duration-500 transform translate-y-20 opacity-0 flex items-center gap-3 z-50">
+        <span class="text-xl">✨</span>
+        <span id="toast-message" class="text-sm font-medium">নতুন ভিডিও যুক্ত হয়েছে!</span>
+    </div>
+
+    <!-- ফুটার -->
     <footer class="bg-gray-900 text-gray-400 py-6 mt-12 text-center text-sm border-t border-gray-800">
         <p>© ২০২৬ রক্তের টান। সর্বস্বত্ব সংরক্ষিত।</p>
     </footer>
 
-    <script>
-        const API_KEY = 'AIzaSyBwieraquhUI5OSIuj5jld-G-IPK-bLx9c'; // আপনার ইউটিউব এপিআই কি
+    <!-- ফায়ারবেজ লাইব্রেরি এবং কাস্টম লজিক (CDN) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, doc, getDoc, setDoc, getDocs, query, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // আপনার ফায়ারবেজ কনফিগারেশন
+        const firebaseConfig = {
+            apiKey: "AIzaSyDnThVM1xdap1VKG7bSuB5q_HVxNcsjrrI",
+            authDomain: "roktertanveideoportal.firebaseapp.com",
+            projectId: "roktertanveideoportal",
+            storageBucket: "roktertanveideoportal.firebasestorage.app",
+            messagingSenderId: "995650365132",
+            appId: "1:995650365132:web:0da1579dc8df0ebff0c469",
+            measurementId: "G-4EB0BQTVW2"
+        };
+
+        // ফায়ারবেজ ইনিশিয়ালাইজ
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // ইউটিউব কনফিগারেশন
+        const YOUTUBE_API_KEY = 'AIzaSyBwieraquhUI5OSIuj5jld-G-IPK-bLx9c';
+        // রক্তদান ও স্বাস্থ্য সম্পর্কিত কিওয়ার্ড যা ইউটিউব থেকে ভিডিও আনবে
         const SEARCH_QUERY = 'রক্তদান সচেতনতা রক্ত দেওয়ার উপকারিতা Health Tips Bangla';
 
-        async function fetchYouTubeVideos() {
-            const loadingEl = document.getElementById('loading');
-            const gridEl = document.getElementById('video-grid');
+        const loadingEl = document.getElementById('loading');
+        const gridEl = document.getElementById('video-grid');
+        const syncStatus = document.getElementById('sync-status');
+        const totalCountText = document.getElementById('total-count-text');
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
 
+        // নোটিফিকেশন দেখানোর ফাংশন
+        function showToast(message) {
+            toastMessage.innerText = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 5000);
+        }
+
+        // স্ক্রিনে ভিডিও দেখানোর ফাংশন (এম্বেড ভিডিও প্লেয়ার)
+        function renderVideos(videoList) {
+            let cardsHTML = '';
+            videoList.forEach(video => {
+                cardsHTML += `
+                    <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col">
+                        <div class="relative aspect-video w-full bg-black">
+                            <iframe
+                                class="absolute top-0 left-0 w-full h-full"
+                                src="https://www.youtube.com/embed/${video.videoId}"
+                                title="${video.title}"
+                                frameborder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowfullscreen
+                                loading="lazy"
+                            ></iframe>
+                        </div>
+                        <div class="p-5 flex flex-col flex-grow">
+                            <h2 class="text-md font-bold text-gray-900 line-clamp-2 mb-2">${video.title}</h2>
+                            <p class="text-xs text-red-500 font-semibold">চ্যানেল: ${video.channelTitle}</p>
+                        </div>
+                    </div>
+                `;
+            });
+            gridEl.innerHTML = cardsHTML;
+            loadingEl.classList.add('hidden');
+            gridEl.classList.remove('hidden');
+        }
+
+        // ইউটিউব থেকে নতুন ১০টি ভিডিও নিয়ে এসে চেক করে ডেটাবেজে সেভ করার ফাংশন (ব্যাকগ্রাউন্ড প্রসেস)
+        async function runBackgroundSync() {
+            syncStatus.innerText = "নতুন ভিডিও খোঁজা হচ্ছে...";
             try {
-                // সরাসরি জাভাস্ক্রিপ্ট দিয়ে ইউটিউব এপিআই কল
-                const url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&q=${encodeURIComponent(SEARCH_QUERY)}&part=snippet&maxResults=21&type=video&videoEmbeddable=true&regionCode=BD`;
-                
+                const url = `https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&q=${encodeURIComponent(SEARCH_QUERY)}&part=snippet&maxResults=15&type=video&videoEmbeddable=true&regionCode=BD`;
                 const response = await fetch(url);
-                const data = await response.getReader ? await response.json() : await response.json();
-                
+                const data = await response.json();
+
                 if (!data.items || data.items.length === 0) {
-                    loadingEl.innerText = "কোনো ভিডিও পাওয়া যায়নি বা এপিআই লিমিট শেষ।";
+                    syncStatus.innerText = "সিঙ্ক সম্পন্ন";
                     return;
                 }
 
-                let cardsHTML = '';
+                let newlyAddedCount = 0;
 
-                // ভিডিওর তালিকা তৈরি করা
-                data.items.forEach(video => {
-                    const videoId = video.id.videoId;
-                    const title = video.snippet.title;
-                    const channelTitle = video.snippet.channelTitle;
-                    const description = video.snippet.description || 'কোনো বিবরণ নেই।';
+                // প্রতিটি ভিডিওর জন্য চেক করা হবে এটি ডেটাবেজে আগে থেকে আছে কিনা
+                for (const item of data.items) {
+                    const videoId = item.id.videoId;
+                    const docRef = doc(db, "saved_portal_videos", videoId);
+                    const docSnap = await getDoc(docRef);
 
-                    cardsHTML += `
-                        <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col">
-                            <div class="relative aspect-video w-full">
-                                <iframe
-                                    class="absolute top-0 left-0 w-full h-full"
-                                    src="https://www.youtube.com/embed/${videoId}"
-                                    title="${title}"
-                                    frameborder="0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowfullscreen
-                                ></iframe>
-                            </div>
-                            <div class="p-5 flex flex-col flex-grow">
-                                <h2 class="text-lg font-bold text-gray-900 line-clamp-2 mb-2">${title}</h2>
-                                <p class="text-sm text-red-500 font-semibold mb-2">চ্যানেল: ${channelTitle}</p>
-                                <p class="text-sm text-gray-500 line-clamp-2 flex-grow">${description}</p>
-                            </div>
-                        </div>
-                    `;
-                });
+                    // যদি ভিডিওটি ডেটাবেজে না থাকে (একেবারে নতুন), তবেই সেভ হবে
+                    if (!docSnap.exists()) {
+                        await setDoc(docRef, {
+                            videoId: videoId,
+                            title: item.snippet.title,
+                            channelTitle: item.snippet.channelTitle,
+                            timestamp: Date.now()
+                        });
+                        newlyAddedCount++;
+                    }
+                }
 
-                // স্ক্রিনে ভিডিও দেখানো
-                gridEl.innerHTML = cardsHTML;
-                loadingEl.classList.add('hidden');
-                gridEl.classList.remove('hidden');
-
+                syncStatus.innerText = "সিঙ্ক সম্পন্ন";
+                if (newlyAddedCount > 0) {
+                    showToast(`ব্যাকগ্রাউন্ডে আরও ${newlyAddedCount}টি নতুন ইউনিক ভিডিও ডেটাবেজে যোগ করা হয়েছে!`);
+                }
             } catch (error) {
-                console.error("ভুল হয়েছে:", error);
-                loadingEl.innerText = "ভিডিও লোড করতে সমস্যা হয়েছে। দয়া করে পরে চেষ্টা করুন।";
+                console.error("ব্যাকগ্রাউন্ড সিঙ্ক এরর:", error);
+                syncStatus.innerText = "সিঙ্ক বিঘ্নিত হয়েছে";
             }
         }
 
-        // পেজ লোড হলেই ফাংশনটি চালু হবে
-        window.onload = fetchYouTubeVideos;
+        // পোর্টাল শুরু করার মূল ফাংশন
+        async function initPortal() {
+            try {
+                // ১. ডেটাবেজ থেকে সরাসরি সব সেভ করা ভিডিও দ্রুত কুয়েরি করে নিয়ে আসা (সর্বোচ্চ ১০০টি)
+                const q = query(collection(db, "saved_portal_videos"), limit(100));
+                const querySnapshot = await getDocs(q);
+                let loadedVideos = [];
+
+                querySnapshot.forEach((doc) => {
+                    loadedVideos.push(doc.data());
+                });
+
+                totalCountText.innerText = `আমাদের ডেটাবেজে মোট ${loadedVideos.length}টি ভিডিও সুরক্ষিত আছে।`;
+
+                if (loadedVideos.length > 0) {
+                    // ২. ভিডিওগুলো মিক্স (Shuffle) করে রেন্ডার করা যাতে প্রতি পেজ লোডে ইউজার নতুন নতুন ভিডিওর মতো কম্বিনেশন দেখতে পায়
+                    loadedVideos.sort(() => Math.random() - 0.5);
+                    // স্ক্রিনে একবারে ১২টি ভিডিও দেখাবে (খুব দ্রুত লোডিংয়ের জন্য)
+                    renderVideos(loadedVideos.slice(0, 12));
+                    
+                    // ৩. স্ক্রিনে রেন্ডার হওয়ার পর, ব্যাকগ্রাউন্ডে ইউটিউব থেকে নতুন ভিডিও খুঁজবে এবং ইউনিক ভিডিওগুলো ডেটাবেজে ভরবে
+                    setTimeout(runBackgroundSync, 2000); // ২ সেকেন্ড পর শান্তভাবে ব্যাকগ্রাউন্ডে রান হবে
+                } else {
+                    // ৪. ডেটাবেজ যদি একদম নতুন ও খালি হয়ে থাকে (প্রথমবার ভিজিটের ক্ষেত্রে), সরাসরি প্রথম ব্যাচ নিয়ে আসবে
+                    syncStatus.innerText = "প্রথমবারের মতো ভিডিও সেটআপ হচ্ছে...";
+                    await runBackgroundSync();
+                    // পেজটি পুনরায় রিফ্রেশ করে ডেটাবেজ থেকে রেন্ডার করা হবে
+                    window.location.reload();
+                }
+            } catch (e) {
+                console.error("ফায়ারবেজ ইনিশিয়েট সমস্যা:", e);
+                loadingEl.innerText = "নেটওয়ার্ক কানেকশন চেক করুন!";
+            }
+        }
+
+        // সাইট ওপেন হওয়া মাত্রই রান করবে
+        window.onload = initPortal;
     </script>
 </body>
 </html>
