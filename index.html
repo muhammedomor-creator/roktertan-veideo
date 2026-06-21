@@ -31,7 +31,7 @@
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
                     </span>
-                    <span id="sync-status">ডেটাবেজ চেক করা হচ্ছে...</span>
+                    <span id="sync-status">চেক করা হচ্ছে...</span>
                 </div>
 
                 <a 
@@ -49,18 +49,18 @@
     <!-- মূল কন্টেন্ট -->
     <main class="max-w-7xl mx-auto px-4 py-8">
         <div class="text-center mb-8">
-            <h1 class="text-3xl font-extrabold text-gray-900 mb-2">রক্তদান ও স্বাস্থ্য সচেতনতা ভিডিও গ্যালারি</h1>
+            <h1 class="text-3xl font-extrabold text-gray-900 mb-2">মেডিকেল, স্বাস্থ্য ও চিকিৎসা সচেতনতা ভিডিও পোর্টাল</h1>
             <p id="total-count-text" class="text-gray-600 text-sm">তথ্য লোড হচ্ছে...</p>
         </div>
 
-        <!-- ভিডিও লোডিং মেসেজ (প্রথমবার ভিজিট করার জন্য) -->
-        <div id="loading" class="text-center py-20 text-xl font-medium text-gray-500">
-            দয়া করে অপেক্ষা করুন, ভিডিও লোড হচ্ছে...
+        <!-- ভিডিও গ্রিড -->
+        <div id="video-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <!-- জাভাস্ক্রিপ্ট দিয়ে ভিডিওর কার্ডগুলো এখানে বসবে -->
         </div>
 
-        <!-- ভিডিও গ্রিড -->
-        <div id="video-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 hidden">
-            <!-- জাভাস্ক্রিপ্ট দিয়ে ভিডিওর কার্ডগুলো এখানে বসবে -->
+        <!-- লোডিং বা মেসেজ সেকশন -->
+        <div id="loading" class="text-center py-10 text-xl font-medium text-gray-500">
+            দয়া করে অপেক্ষা করুন, ভিডিও লোড হচ্ছে...
         </div>
     </main>
 
@@ -78,7 +78,7 @@
     <!-- ফায়ারবেজ লাইব্রেরি এবং কাস্টম লজিক (CDN) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, setDoc, getDocs, query, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, setDoc, getDocs, query, orderBy, startAfter, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         // আপনার ফায়ারবেজ কনফিগারেশন
         const firebaseConfig = {
@@ -97,8 +97,25 @@
 
         // ইউটিউব কনফিগারেশন
         const YOUTUBE_API_KEY = 'AIzaSyBwieraquhUI5OSIuj5jld-G-IPK-bLx9c';
-        // রক্তদান ও স্বাস্থ্য সম্পর্কিত কিওয়ার্ড যা ইউটিউব থেকে ভিডিও আনবে
-        const SEARCH_QUERY = 'রক্তদান সচেতনতা রক্ত দেওয়ার উপকারিতা Health Tips Bangla';
+
+        // মেডিকেল ও চিকিৎসা সম্পর্কিত বিচিত্র কিওয়ার্ড ব্যাংক (প্রতি সিঙ্কে একটি ভিন্ন কিওয়ার্ড ব্যবহার হবে)
+        const SEARCH_KEYWORDS = [
+            'রক্তদান সচেতনতা রক্ত দেওয়ার উপকারিতা',
+            'Bangladeshi doctor health advice পরামর্শ',
+            'ডাক্তারের স্বাস্থ্য টিপস রোগ নিরাময় চিকিৎসা',
+            'হৃদরোগের লক্ষণ ও প্রতিকার সচেতনতা',
+            'কিডনি রোগ সচেতনতা চিকিৎসা পরামর্শ',
+            'ডায়াবেটিস নিয়ন্ত্রণ টিপস ডাক্তার',
+            'মা ও শিশুর যত্ন স্বাস্থ্য সচেতনতা মেডিকেল',
+            'পুষ্টিবিদ পরামর্শ Diet Chart Bangla',
+            'মেডিসিন বিশেষজ্ঞ পরামর্শ রোগ নিরাময়',
+            'উচ্চ রক্তচাপ হাইপারটেনশন প্রতিকার'
+        ];
+
+        let lastVisibleDoc = null; // ইনফিনিটি স্ক্রলিংয়ের জন্য শেষ ডকুমেন্টের ট্র্যাক
+        let isFetchingNextPage = false;
+        let hasMoreVideos = true;
+        let activeVideoContainerId = null; // বর্তমানে কোন প্লেয়ার চালু আছে তা ট্র্যাক করার জন্য
 
         const loadingEl = document.getElementById('loading');
         const gridEl = document.getElementById('video-grid');
@@ -116,40 +133,79 @@
             }, 5000);
         }
 
-        // স্ক্রিনে ভিডিও দেখানোর ফাংশন (এম্বেড ভিডিও প্লেয়ার)
-        function renderVideos(videoList) {
-            let cardsHTML = '';
-            videoList.forEach(video => {
-                cardsHTML += `
-                    <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col">
-                        <div class="relative aspect-video w-full bg-black">
-                            <iframe
-                                class="absolute top-0 left-0 w-full h-full"
-                                src="https://www.youtube.com/embed/${video.videoId}"
-                                title="${video.title}"
-                                frameborder="0"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowfullscreen
-                                loading="lazy"
-                            ></iframe>
-                        </div>
-                        <div class="p-5 flex flex-col flex-grow">
-                            <h2 class="text-md font-bold text-gray-900 line-clamp-2 mb-2">${video.title}</h2>
-                            <p class="text-xs text-red-500 font-semibold">চ্যানেল: ${video.channelTitle}</p>
-                        </div>
-                    </div>
+        // থাম্বনেইল প্লে করার ও আগের প্লেয়ার বন্ধ করার প্রফেশনাল লজিক
+        window.playVideo = function(videoId, containerId) {
+            // যদি আগে কোনো ভিডিও চলতে থাকে, সেটিকে আবার থাম্বনেইলে রূপান্তর করব
+            if (activeVideoContainerId && activeVideoContainerId !== containerId) {
+                const prevContainer = document.getElementById(activeVideoContainerId);
+                if (prevContainer) {
+                    const prevVideoId = prevContainer.getAttribute('data-video-id');
+                    const prevTitle = prevContainer.getAttribute('data-title');
+                    // থাম্বনেইল স্ট্রাকচার ফিরিয়ে দেওয়া
+                    prevContainer.innerHTML = getThumbnailHTML(prevVideoId, prevTitle, activeVideoContainerId);
+                }
+            }
+
+            // নতুন ভিডিওটি প্লে করা
+            const currentContainer = document.getElementById(containerId);
+            if (currentContainer) {
+                activeVideoContainerId = containerId;
+                currentContainer.innerHTML = `
+                    <iframe
+                        class="absolute top-0 left-0 w-full h-full"
+                        src="https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1"
+                        title="YouTube video player"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen
+                    ></iframe>
                 `;
-            });
-            gridEl.innerHTML = cardsHTML;
-            loadingEl.classList.add('hidden');
-            gridEl.classList.remove('hidden');
+            }
         }
 
-        // ইউটিউব থেকে নতুন ১০টি ভিডিও নিয়ে এসে চেক করে ডেটাবেজে সেভ করার ফাংশন (ব্যাকগ্রাউন্ড প্রসেস)
+        // থাম্বনেইল কার্ডের এইচটিএমএল স্ট্রাকচার
+        function getThumbnailHTML(videoId, title, containerId) {
+            return `
+                <img src="https://img.youtube.com/vi/${videoId}/mqdefault.jpg" alt="${title}" class="absolute top-0 left-0 w-full h-full object-cover" loading="lazy">
+                <!-- ডার্ক ওভারলে এবং প্লে বাটন -->
+                <div class="absolute inset-0 bg-black/30 hover:bg-black/10 transition-colors flex items-center justify-center cursor-pointer" onclick="playVideo('${videoId}', '${containerId}')">
+                    <div class="bg-red-600 hover:bg-red-700 text-white rounded-full p-4 shadow-2xl transition-transform hover:scale-110">
+                        <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                    </div>
+                </div>
+            `;
+        }
+
+        // স্ক্রিনে ভিডিও কার্ড রেন্ডার করা
+        function appendVideosToGrid(videoList) {
+            videoList.forEach(video => {
+                const containerId = `player-container-${video.videoId}`;
+                const card = document.createElement('div');
+                card.className = "bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col";
+                card.innerHTML = `
+                    <div id="${containerId}" data-video-id="${video.videoId}" data-title="${video.title.replace(/"/g, '&quot;')}" class="relative aspect-video w-full bg-black">
+                        ${getThumbnailHTML(video.videoId, video.title, containerId)}
+                    </div>
+                    <div class="p-5 flex flex-col flex-grow">
+                        <h2 class="text-md font-bold text-gray-900 line-clamp-2 mb-2">${video.title}</h2>
+                        <p class="text-xs text-red-500 font-semibold">চ্যানেল: ${video.channelTitle}</p>
+                    </div>
+                `;
+                gridEl.appendChild(card);
+            });
+            loadingEl.classList.add('hidden');
+        }
+
+        // ইউটিউব থেকে নতুন ২০টি ভিডিও নিয়ে এসে ফায়ারবেজে সেভ করা (ব্যাকগ্রাউন্ড প্রসেস)
         async function runBackgroundSync() {
             syncStatus.innerText = "নতুন ভিডিও খোঁজা হচ্ছে...";
             try {
-                const url = `https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&q=${encodeURIComponent(SEARCH_QUERY)}&part=snippet&maxResults=15&type=video&videoEmbeddable=true&regionCode=BD`;
+                // কিওয়ার্ড ব্যাংক থেকে র‍্যান্ডম একটি কিওয়ার্ড পছন্দ করা
+                const randomKeyword = SEARCH_KEYWORDS[Math.floor(Math.random() * SEARCH_KEYWORDS.length)];
+                
+                const url = `https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&q=${encodeURIComponent(randomKeyword)}&part=snippet&maxResults=20&type=video&videoEmbeddable=true&regionCode=BD`;
                 const response = await fetch(url);
                 const data = await response.json();
 
@@ -160,13 +216,12 @@
 
                 let newlyAddedCount = 0;
 
-                // প্রতিটি ভিডিওর জন্য চেক করা হবে এটি ডেটাবেজে আগে থেকে আছে কিনা
                 for (const item of data.items) {
                     const videoId = item.id.videoId;
                     const docRef = doc(db, "saved_portal_videos", videoId);
                     const docSnap = await getDoc(docRef);
 
-                    // যদি ভিডিওটি ডেটাবেজে না থাকে (একেবারে নতুন), তবেই সেভ হবে
+                    // যদি ভিডিওটি আগে থেকে সেভ না থাকে, তবেই সেভ হবে
                     if (!docSnap.exists()) {
                         await setDoc(docRef, {
                             videoId: videoId,
@@ -180,50 +235,89 @@
 
                 syncStatus.innerText = "সিঙ্ক সম্পন্ন";
                 if (newlyAddedCount > 0) {
-                    showToast(`ব্যাকগ্রাউন্ডে আরও ${newlyAddedCount}টি নতুন ইউনিক ভিডিও ডেটাবেজে যোগ করা হয়েছে!`);
+                    showToast(`সফলতা! আরও ${newlyAddedCount}টি নতুন ইউনিক মেডিকেল ভিডিও ডেটাবেজে যুক্ত হয়েছে।`);
                 }
             } catch (error) {
                 console.error("ব্যাকগ্রাউন্ড সিঙ্ক এরর:", error);
-                syncStatus.innerText = "সিঙ্ক বিঘ্নিত হয়েছে";
+                syncStatus.innerText = "সিঙ্ক বিঘ্নিত";
             }
         }
 
-        // পোর্টাল শুরু করার মূল ফাংশন
-        async function initPortal() {
-            try {
-                // ১. ডেটাবেজ থেকে সরাসরি সব সেভ করা ভিডিও দ্রুত কুয়েরি করে নিয়ে আসা (সর্বোচ্চ ১০০টি)
-                const q = query(collection(db, "saved_portal_videos"), limit(100));
-                const querySnapshot = await getDocs(q);
-                let loadedVideos = [];
+        // ফায়ারবেজ থেকে কুয়েরি করে পরবর্তী পেজ (Next 20 Videos) লোড করার ফাংশন
+        async function loadNextPage() {
+            if (isFetchingNextPage || !hasMoreVideos) return;
+            isFetchingNextPage = true;
+            loadingEl.innerText = "আরও ভিডিও লোড হচ্ছে...";
+            loadingEl.classList.remove('hidden');
 
+            try {
+                let nextQuery;
+                if (lastVisibleDoc) {
+                    nextQuery = query(
+                        collection(db, "saved_portal_videos"),
+                        orderBy("timestamp", "desc"),
+                        startAfter(lastVisibleDoc),
+                        limit(20)
+                    );
+                } else {
+                    nextQuery = query(
+                        collection(db, "saved_portal_videos"),
+                        orderBy("timestamp", "desc"),
+                        limit(20)
+                    );
+                }
+
+                const querySnapshot = await getDocs(nextQuery);
+                
+                if (querySnapshot.empty) {
+                    hasMoreVideos = false;
+                    loadingEl.innerText = "সব ভিডিও লোড করা সম্পন্ন হয়েছে।";
+                    return;
+                }
+
+                lastVisibleDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+                let videoBatch = [];
                 querySnapshot.forEach((doc) => {
-                    loadedVideos.push(doc.data());
+                    videoBatch.push(doc.data());
                 });
 
-                totalCountText.innerText = `আমাদের ডেটাবেজে মোট ${loadedVideos.length}টি ভিডিও সুরক্ষিত আছে।`;
-
-                if (loadedVideos.length > 0) {
-                    // ২. ভিডিওগুলো মিক্স (Shuffle) করে রেন্ডার করা যাতে প্রতি পেজ লোডে ইউজার নতুন নতুন ভিডিওর মতো কম্বিনেশন দেখতে পায়
-                    loadedVideos.sort(() => Math.random() - 0.5);
-                    // স্ক্রিনে একবারে ১২টি ভিডিও দেখাবে (খুব দ্রুত লোডিংয়ের জন্য)
-                    renderVideos(loadedVideos.slice(0, 12));
-                    
-                    // ৩. স্ক্রিনে রেন্ডার হওয়ার পর, ব্যাকগ্রাউন্ডে ইউটিউব থেকে নতুন ভিডিও খুঁজবে এবং ইউনিক ভিডিওগুলো ডেটাবেজে ভরবে
-                    setTimeout(runBackgroundSync, 2000); // ২ সেকেন্ড পর শান্তভাবে ব্যাকগ্রাউন্ডে রান হবে
-                } else {
-                    // ৪. ডেটাবেজ যদি একদম নতুন ও খালি হয়ে থাকে (প্রথমবার ভিজিটের ক্ষেত্রে), সরাসরি প্রথম ব্যাচ নিয়ে আসবে
-                    syncStatus.innerText = "প্রথমবারের মতো ভিডিও সেটআপ হচ্ছে...";
-                    await runBackgroundSync();
-                    // পেজটি পুনরায় রিফ্রেশ করে ডেটাবেজ থেকে রেন্ডার করা হবে
-                    window.location.reload();
-                }
-            } catch (e) {
-                console.error("ফায়ারবেজ ইনিশিয়েট সমস্যা:", e);
-                loadingEl.innerText = "নেটওয়ার্ক কানেকশন চেক করুন!";
+                appendVideosToGrid(videoBatch);
+            } catch (error) {
+                console.error("নেক্সট পেজ লোড এরর:", error);
+            } finally {
+                isFetchingNextPage = false;
             }
         }
 
-        // সাইট ওপেন হওয়া মাত্রই রান করবে
+        // ইনফিনিটি স্ক্রলিং ইভেন্ট লিসেনার
+        window.addEventListener('scroll', () => {
+            const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+            // স্ক্রল করে পেজের নিচ থেকে ৪০০ পিক্সেল উপরে আসলেই নতুন ডেটা লোড করবে
+            if (scrollTop + clientHeight >= scrollHeight - 400) {
+                loadNextPage();
+            }
+        });
+
+        // পোর্টাল চালু করার মেইন ফাংশন
+        async function initPortal() {
+            try {
+                // প্রথম ২০টি ভিডিও ডেটাবেজ থেকে অত্যন্ত দ্রুত লোড করা
+                await loadNextPage();
+
+                // টোটাল কয়টি ভিডিও আছে তা ফায়ারবেজ থেকে জানা
+                const countQuery = query(collection(db, "saved_portal_videos"));
+                const countSnapshot = await getDocs(countQuery);
+                totalCountText.innerText = `আমাদের ডেটাবেজে মোট ${countSnapshot.size}টি মেডিকেল ও চিকিৎসা ভিডিও সংরক্ষিত আছে।`;
+
+                // প্রথম ব্যাচ লোড হয়ে যাওয়ার পর নীরবে ব্যাকগ্রাউন্ডে ইউটিউব থেকে নতুন ডেটা চেক হবে
+                setTimeout(runBackgroundSync, 3000); // পেজ রেডি হওয়ার ৩ সেকেন্ড পর রান হবে
+            } catch (e) {
+                console.error("ফায়ারবেজ ইনিশিয়েট সমস্যা:", e);
+                loadingEl.innerText = "কানেকশন বিঘ্নিত হয়েছে। দয়া করে পেজটি রিফ্রেশ দিন।";
+            }
+        }
+
+        // পেজ লোড সম্পন্ন হলে রান হবে
         window.onload = initPortal;
     </script>
 </body>
