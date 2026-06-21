@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>রক্তের টান - ভিডিও পোর্টাল</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;  
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+    <header class="bg-red-600 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl font-bold tracking-wide">🩸 রক্তের টান (ভিডিও পোর্টাল)</span>
+            </div>
+            
+            <div>
+                <a 
+                  href="https://emergencyroktolagbe.vercel.app/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="bg-white text-red-600 hover:bg-gray-100 px-5 py-2 rounded-lg font-bold shadow transition text-sm flex items-center"
+                >
+                  🔍 রক্ত খুঁজুন
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-extrabold text-gray-900 mb-2">রক্তদান ও স্বাস্থ্য সচেতনতা ভিডিও গ্যালারি</h1>
+            <p class="text-gray-600">ইউটিউব থেকে সরাসরি বাছাইকৃত সেরা সব তথ্যবহুল ভিডিও।</p>
+        </div>
+
+        <div id="loading" class="text-center py-20 text-xl font-medium text-gray-500">
+            ইউটিউব থেকে ভিডিও লোড হচ্ছে, দয়া করে অপেক্ষা করুন...
+        </div>
+
+        <div id="video-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 hidden">
+            </div>
+    </main>
+
+    <footer class="bg-gray-900 text-gray-400 py-6 mt-12 text-center text-sm border-t border-gray-800">
+        <p>© ২০২৬ রক্তের টান। সর্বস্বত্ব সংরক্ষিত।</p>
+    </footer>
+
+    <script>
+        const API_KEY = 'AIzaSyBwieraquhUI5OSIuj5jld-G-IPK-bLx9c'; // আপনার ইউটিউব এপিআই কি
+        const SEARCH_QUERY = 'রক্তদান সচেতনতা রক্ত দেওয়ার উপকারিতা Health Tips Bangla';
+
+        async function fetchYouTubeVideos() {
+            const loadingEl = document.getElementById('loading');
+            const gridEl = document.getElementById('video-grid');
+
+            try {
+                // সরাসরি জাভাস্ক্রিপ্ট দিয়ে ইউটিউব এপিআই কল
+                const url = `https://www.googleapis.com/youtube/v3/search?key=${API_KEY}&q=${encodeURIComponent(SEARCH_QUERY)}&part=snippet&maxResults=21&type=video&videoEmbeddable=true&regionCode=BD`;
+                
+                const response = await fetch(url);
+                const data = await response.getReader ? await response.json() : await response.json();
+                
+                if (!data.items || data.items.length === 0) {
+                    loadingEl.innerText = "কোনো ভিডিও পাওয়া যায়নি বা এপিআই লিমিট শেষ।";
+                    return;
+                }
+
+                let cardsHTML = '';
+
+                // ভিডিওর তালিকা তৈরি করা
+                data.items.forEach(video => {
+                    const videoId = video.id.videoId;
+                    const title = video.snippet.title;
+                    const channelTitle = video.snippet.channelTitle;
+                    const description = video.snippet.description || 'কোনো বিবরণ নেই।';
+
+                    cardsHTML += `
+                        <div class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col">
+                            <div class="relative aspect-video w-full">
+                                <iframe
+                                    class="absolute top-0 left-0 w-full h-full"
+                                    src="https://www.youtube.com/embed/${videoId}"
+                                    title="${title}"
+                                    frameborder="0"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowfullscreen
+                                ></iframe>
+                            </div>
+                            <div class="p-5 flex flex-col flex-grow">
+                                <h2 class="text-lg font-bold text-gray-900 line-clamp-2 mb-2">${title}</h2>
+                                <p class="text-sm text-red-500 font-semibold mb-2">চ্যানেল: ${channelTitle}</p>
+                                <p class="text-sm text-gray-500 line-clamp-2 flex-grow">${description}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                // স্ক্রিনে ভিডিও দেখানো
+                gridEl.innerHTML = cardsHTML;
+                loadingEl.classList.add('hidden');
+                gridEl.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("ভুল হয়েছে:", error);
+                loadingEl.innerText = "ভিডিও লোড করতে সমস্যা হয়েছে। দয়া করে পরে চেষ্টা করুন।";
+            }
+        }
+
+        // পেজ লোড হলেই ফাংশনটি চালু হবে
+        window.onload = fetchYouTubeVideos;
+    </script>
+</body>
+</html>
