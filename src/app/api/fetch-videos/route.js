@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import { db } from '@/firebase/config';
+import { db } from '../../../firebase/config';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export async function GET() {
